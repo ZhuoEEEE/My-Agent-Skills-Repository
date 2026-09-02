@@ -1,0 +1,7 @@
+interface:
+  display_name: "Playground Workspace Init"
+  short_description: "Initialize or upgrade a multi-topic Playground workspace"
+  default_prompt: "Use $playground-workspace-init to initialize or safely upgrade this Playground workspace."
+
+policy:
+  allow_implicit_invocation: false
