@@ -35,6 +35,7 @@ policy:
 - 工作区根目录保持整洁，所有工具、脚本、日志和其他产物分类存放并具有说明。
 - 工作区使用 Agent 管理 Git、源组私有 Git 和可选的用户工程 Git 分离管理不同内容。
 - 根目录生成面向用户的中文使用手册，隐藏内部复杂度。
+- 非空旧 Agent 工作区迁移到新的纯净路径后保持原样，作为 Agent 可按需读取的外部历史参考，不再为迁移重复创建备份副本。
 
 ## 不做的事情
 
@@ -51,6 +52,7 @@ policy:
 - 不实现板卡资源锁或持久化硬件租约。
 - 不强制完整分层测试流水线，不为了形式引入测试框架或模拟器。
 - 不创建专用 Git 提交 Skill；提交规则由 `AGENTS.md` 约束。
+- 不在原路径交换或重组非空旧 Agent 工作区，也不为迁移再复制一份内容相同的初始化备份。
 
 ## 核心术语
 
@@ -81,10 +83,10 @@ policy:
 ### Workstream Git 基线
 
 - `user_baseline_commit`：当前 workstream 用于三方比较的用户同步基线。
-- `task_base_commit`：workstream 分支实际创建点，可以包含已声明的其他 workstream 依赖。
+- `task_base_commit`：workstream 分支实际创建点，可以包含已固定到具体提交的其他 workstream 依赖。
 - `head_commit`：发布前冻结的当前 workstream 状态。
 
-发布范围由 `task_base_commit` 到 `head_commit` 的差异和显式依赖闭包确定；三方冲突判断使用 `user_baseline_commit` 中的用户内容。
+发布范围由 `task_base_commit` 到 `head_commit` 的差异和固定提交的显式依赖闭包确定；三方冲突判断使用 `user_baseline_commit` 中的用户内容。
 
 ### 构建基线
 
@@ -93,6 +95,10 @@ policy:
 ### 参考工程
 
 放在 `reference-projects/` 中、仅供阅读、比较和借鉴的工程快照。参考工程不是用户权威工程、受管源组、构建目标或发布对象，Agent 不在其中直接开发。
+
+### 旧工作区参考
+
+迁移前的非空旧 Agent 工作区。它保留在原路径，Agent 可以按任务需要读取其中的代码、文档、方案和历史状态，但不得把其中的旧规则作为当前指令，也不得对整棵旧目录自动执行目标登记、同步、构建或发布。它不是 `reference-projects/` 中经过包装的普通参考工程。
 
 ### 管理根目录
 
@@ -172,40 +178,28 @@ managed_root: .
 
 ### 非空 Agent 工作区迁移
 
-非空候选或旧 Agent 工作区采用“外部完整快照、分类重建、验证后启用”：
+非空候选或旧 Agent 工作区采用“新路径建立、旧路径保留、验证后启用”：
 
 1. 只读盘点现有文件、目录、Git、未提交状态、工程入口、链接和说明文件。
-2. 展示预计备份位置、分类映射、排除项、Git 边界、将创建、移动、归档或保留的内容、验证和回滚方法，然后停止等待用户确认。
+2. 展示旧工作区真实路径、新的最终工作区路径、分类映射、排除项、Git 边界、将复制或保留的内容以及验证方法，然后停止等待用户确认。
 3. 用户未回应、拒绝或取消时零写入结束；只确认部分内容时先生成新计划，不自行实施部分迁移。
 4. 用户确认完整计划后重新检查当前状态；发生实质变化时更新计划并再次确认。
-5. 提醒用户保存相关编辑器内容，并在迁移期间暂停写入当前 Agent 工作区。
-6. 在当前工作区之外创建完整恢复备份，保留原目录结构并生成文件数量、大小和 SHA-256 清单。
-7. 在同级临时目录建立新的标准结构，从已验证备份按明确分类映射复制内容。
-8. 无法可靠分类的内容进入迁移待确认清单，不擅自删除、改名或归类。
-9. 检查文件清单、Git 边界、相对路径、敏感内容、工程识别和可用构建入口。
-10. 验证通过后启用新结构，并要求重新打开工作区以加载唯一的根规则。
-11. 备份继续保留为人工恢复点，初始化系统不自动删除。
+5. 提醒用户保存相关编辑器内容，并在复制期间暂停写入旧工作区。
+6. 确认新路径是全新空目录，且与旧工作区和所有用户权威路径的真实路径互不包含；在新路径创建 `workspace_state: initializing` 的标准结构。
+7. 直接从保持原样的旧工作区按明确分类映射复制内容，不创建第二份初始化备份。无法可靠分类的内容只进入迁移待确认清单，不擅自删除、改名或归类。
+8. 复制期间检测源文件是否发生变化；发现变化时停止复制并保留新目录的 `initializing` 状态，重新盘点后再执行，不把不一致副本启用为工作区。
+9. 检查文件清单、Git 边界、相对路径、敏感内容、工程识别和可用构建入口，并确认旧工作区没有被修改。
+10. 全部验证通过后原子更新为 `workspace_state: active`，记录 `migrated_from`、迁移时间和来源清单摘要，并要求用户从新路径重新打开 Codex。
+11. 验证失败时旧工作区继续可用，新目录保留为未完成候选；初始化系统不交换、移动、重命名或删除旧工作区。
 
-外部备份使用包装目录，快照内容放在 `snapshot/` 中：
+旧工作区本身就是迁移来源和外部历史参考，不再生成 `<workspace>.pre-init-backup-*` 包装目录：
 
-```text
-<workspace>.pre-init-backup-YYYYMMDD-HHMMSS/
-|-- AGENTS.override.md
-|-- README.md
-|-- backup-manifest.json
-`-- snapshot/
-```
-
-- `README.md` 记录来源工作区、创建时间、原路径、恢复方法和人工删除责任，并醒目标注：不要再添加为 Codex 工作区，不参与后续同步和构建。
-- `AGENTS.override.md` 要求误进入该备份根目录的 Agent 只允许检查和恢复，不得修改、构建、登记、同步或发布。
-- `backup-manifest.json` 是扫描器的机器可读排除标记；目标发现、参考工程发现、构建和同步工具必须跳过整个备份树。
-- `snapshot/` 使用 `recovery-backup` 复制策略，尽量原样保存现有内容，包括 `.git`、敏感文件、缓存和本机状态；它不应用 Agent 导入时的过滤规则，也不得进入任何 Agent Git。
-- 备份不跟随符号链接或 junction 展开外部目录，而是在清单中记录链接及解析目标；尽可能保留文件属性和权限信息。
-- 无法获得一致、完整且校验通过的恢复快照时，将备份标记为 `partial`，不得替换或重组原工作区。
-- 新工作区的 `workspace-management/migration/initialization-report.md` 记录备份位置、校验结果、迁移映射、保留项和未执行事项。
-- 根 `USER_GUIDE.md` 记录通用备份原则，但不把备份登记为权威源、参考工程或目标。
-- 创建并验证备份后只提醒用户一次：`初始化备份位于 <path>。请勿将其添加为 Codex 工作区，也不要用于同步或构建。确认新工作区正常后，它仅作为人工恢复点保留，是否删除由你决定。`
-- 每次备份使用唯一 `backup_id`。提醒完成后将 `workspace.yaml` 中的 `migration.last_notified_backup_id` 更新为当前 ID；后续正常任务不重复提醒，新建另一份备份时则对新 ID 再提醒一次。
+- Agent 可以从新工作区按需只读检查旧工作区中的代码、文档、方案和历史状态，但不默认遍历整棵目录。
+- 旧工作区不登记为普通参考工程，也不自动参与目标发现、参考工程发现、构建、导入或发布。
+- 旧工作区中的 `AGENTS.md`、`AGENTS.override.md` 和 fallback 文件只作为历史内容；不得从旧路径启动 Codex，也不得把它们加载为新工作区的当前指令。
+- 需要修改或构建旧内容时，将所需内容复制到当前 workstream 的 `reference-copies/`，不直接写旧工作区。
+- 如果旧目录或其子目录仍是用户日常维护的权威工程，对应路径继续按已确认映射作为用户权威源；只有旧的 Agent 管理外壳和不再使用的内容属于旧工作区参考。
+- 新工作区的 `workspace-management/migration/initialization-report.md` 记录旧路径、来源清单摘要、分类映射、验证结果、保留项和未执行事项。
 
 ### 旧规则归档
 
@@ -213,14 +207,12 @@ managed_root: .
 
 迁移旧 Agent 工作区时：
 
-- 将旧 `AGENTS.md`、`AGENTS.override.md` 和当前配置列出的 fallback 指令文件逐字节复制到 `workspace-management/history/legacy-instructions/`，不得在原文中插入元数据。
+- 将旧工作区中的 `AGENTS.md`、`AGENTS.override.md` 和当前配置列出的 fallback 指令文件逐字节复制到新工作区的 `workspace-management/history/legacy-instructions/`，不得在原文中插入元数据，也不得修改旧路径中的原文件。
 - 归档文件名包含原类型、时间戳和短哈希，避免重名；独立 `manifest.yaml` 记录原路径、归档路径、归档日期、完整 SHA-256 和原文件是否曾生效。
 - 归档名称必须再次检查，不得等于任何当前有效的 fallback 指令文件名。
 - 新根 `AGENTS.md` 只记录归档位置和“仅供迁移审计、不再作为指令、除非用户明确要求否则不要加载”，不复制旧规则正文。
-- 先验证归档和新规则，再以可回滚方式替换旧根规则；不得出现旧 override 继续覆盖新规则的状态。
+- 先验证归档和新根规则，再启用新工作区；旧规则只会在错误地从旧路径启动 Codex 时继续生效，因此用户手册必须禁止把旧工作区作为日常 Codex 项目打开。
 - 外部用户权威工程中的 `AGENTS.md`、`AGENTS.override.md` 或 fallback 文件保持原路径和内容，不移动、不改名、不修改。
-
-外部恢复备份根目录可以保留保护性的 `AGENTS.override.md`，但它只是误打开备份根时的辅助警示，不是安全边界；`backup-manifest.json` 和管理脚本的整树排除才是确定性保护。直接打开备份内的嵌套 Git 或 `snapshot/` 子目录可能绕过外层提示，因此用户手册必须明确禁止这样做。
 
 ### 已有工作区通用保护
 
@@ -229,6 +221,7 @@ managed_root: .
 - `sources/`、`work/`、`reference-projects/`、`project-docs/` 或 `workspace-management/` 已有其他用途时，不得自动认领或覆盖。
 - 已有 Git 只识别和保护，不创建错误嵌套仓库、不改写历史、不夹带既有修改。
 - 已初始化工作区再次调用时保持幂等，只修复缺失内容、刷新事实或执行经过确认的迁移。
+- `workspace_state: initializing` 的候选工作区只允许继续初始化、只读检查或放弃候选，不允许日常开发、导入或发布；只有 `active` 工作区可以进入正常任务。
 
 ## 多权威源和源组判断
 
@@ -239,7 +232,7 @@ managed_root: .
 - 不为管理方便改变用户原有路径、目录名或工程关系。
 - 每个映射使用稳定 `mapping-id`。可移植的 `mapping-id`、`integration-subpath`、类型和映射版本写入 `targets.yaml`；对应的用户绝对 `source-path` 只写入被 Agent 管理 Git 忽略的 `targets.local.yaml`。
 - 第一版只支持目录映射。单文件映射只有出现真实需求后再扩展。
-- 初始化、导入和发布前校验所有真实源路径、集成路径和映射目标互不递归包含；同一源组内的 `integration-subpath` 不得重叠，任一集成文件必须能唯一反向解析到一个 `mapping-id` 和用户相对路径。
+- 初始化、导入和发布前校验所有真实源路径、集成路径和映射目标互不递归包含；同一源组内的 `integration-subpath` 不得重叠。凡纳入用户同步范围的集成文件，都必须能唯一反向解析到一个 `mapping-id` 和用户相对路径；`agent-created` 或没有用户权威源的 `reference-promoted` 源组可以使用空映射，不适用此要求。
 - 映射变化时递增 `mapping_revision` 并更新摘要；旧 workstream 或发布事务引用其他版本时停止发布，先执行经过确认的映射迁移。
 - 副本路径优先使用较短、纯 ASCII、无特殊字符的路径，以兼容旧工具链。
 
@@ -259,7 +252,7 @@ managed_root: .
 4. 首次接入非空目录或需要策略、结构、映射或 schema 迁移时只读展示具体计划；用户确认后才写入。纯事实重新扫描不走迁移流程。
 5. 识别源组、可逆映射、三套 Git 边界、共享路径和嵌套仓库。
 6. 扫描疑似敏感文件、授权凭据和应排除的可重建缓存。
-7. 创建或确认 Agent 管理 Git；按源组创建集成副本并保持必要拓扑。
+7. 新工作区先标记为 `workspace_state: initializing`，再创建或确认 Agent 管理 Git；按源组创建集成副本并保持必要拓扑。
 8. 为每个源组自动建立或确认源组私有 Git；`user-imported` 源组创建可取回内容的首次用户同步基线，其他正式源组创建初始代码基线。
 9. 发现 MCU 工程，生成稳定 `target-id` 并写入目标配置和最小字段元数据。
 10. 识别或导入用户明确提供的参考工程，并与开发源严格区分。
@@ -267,7 +260,7 @@ managed_root: .
 12. 在安全条件满足时尝试一次普通初始构建验证，单独记录构建结果和构建基线。
 13. 独立询问用户是否为没有 Git 的权威工程创建用户 Git；未确认时不修改用户工程，也不阻塞 Agent 工作区初始化。
 14. 生成唯一根规则、概览、用户手册、项目知识层、分类目录和确定性管理脚本。
-15. 验证配置可读、三套 Git 边界有效、分类结构正确、根规则唯一且用户工程未被意外修改。
+15. 验证配置可读、三套 Git 边界有效、分类结构正确、根规则唯一且用户工程未被意外修改；全部通过后才原子更新为 `workspace_state: active`。
 
 ## 后续新 MCU 工程
 
@@ -391,6 +384,44 @@ git:
     push: disabled
 ```
 
+## 共享管理状态并发控制
+
+所有会改变工作区共享状态的管理脚本共用一把工作区级 Windows Named Mutex。锁名由工作区真实路径的规范化表示计算 SHA-256 后生成，例如：
+
+```text
+Local\embedded-workspace-init-<path-sha256-prefix>
+```
+
+规范化路径必须先解析符号链接和 junction，统一大小写、分隔符和末尾分隔符；同一真实工作区不能因不同路径写法得到不同锁。
+
+锁保护：
+
+- `workspace.yaml`、`targets.yaml`、`targets.local.yaml` 和共享索引。
+- Agent 管理 Git，以及源组分支、worktree、基线和稳定 ref 的创建或更新。
+- source、target、mapping 登记和迁移。
+- 用户同步基线、共享同步状态和发布事务。
+- 对用户权威工程的发布写入及其恢复状态。
+
+不同 workstream 的源码编辑、构建、测试和只读扫描不需要取得该锁。
+
+管理脚本按以下顺序工作：
+
+```text
+只读扫描并生成计划
+→ 获取工作区 Mutex
+→ 重新读取共享状态和计划涉及的文件
+→ 确认计划仍然适用
+→ 执行配置或 Git 操作
+→ 验证结果
+→ 释放 Mutex
+```
+
+- 等待超时就结束本次写入并报告资源忙，不创建持久锁文件，也不强行抢锁。
+- 锁内重新读取是强制步骤，不能继续使用锁外的旧 YAML、Git 状态或哈希。
+- YAML、JSON 和清单先写同目录临时文件，解析并验证通过后再原子替换。
+- 同一进程不得嵌套申请另一把工作区管理锁；第一版不拆分源组锁或发布锁。
+- 互斥锁只能协调遵守协议的脚本，不能阻止用户直接编辑文件；因此所有关键写入仍必须执行哈希前置校验。
+
 ## 多对话并行
 
 一个公共集成副本只用于汇总，不直接作为所有对话的共同写入目录。
@@ -407,7 +438,7 @@ git:
 - 不同 workstream 不直接写同一物理源码文件。
 - 新任务、范围扩大、构建前和发布前读取其他活动或仍有未处置改动的 workstream；写入路径范围重叠时先协调。
 - 同一对话中的子 Agent 由主 Agent 分配边界，同一文件同时只能有一个写入者。
-- workstream 可以合入集成副本进行汇总验证，但集成副本不能作为发布差异来源；发布必须绑定明确的 workstream 提交和依赖闭包。
+- workstream 可以合入集成副本进行汇总验证，但集成副本不能作为发布差异来源；发布必须绑定明确的 workstream 提交和固定提交的依赖闭包。
 - 不使用容易因异常退出而遗留的手工锁文件。
 - 所有 Codex 任务必须从纯净 Agent 工作区根启动。`integration/` 和 linked worktree 不得单独添加、保存或打开为 Codex 项目；进入子目录修改或构建不改变任务启动时已加载的根规则。
 - 初始化系统不在 `integration/` 或 worktree 中额外生成规则文件。用户工程原有的 `AGENTS.md` 等同名文件作为工程内容原样保护，但不属于本系统的生效规则。
@@ -447,10 +478,17 @@ agent:
     motor-product:
       branch: workstream/20260910-motor-stall-a13f
       worktree: work/20260910-motor-stall-a13f/sources/motor-product
+      mapping_revision: 3
       user_baseline_commit: <commit>
       task_base_commit: <commit>
       head_commit: null
-dependencies: []
+dependencies:
+  - workstream_id: 20260910-shared-protocol-a13f
+    refs:
+      motor-product:
+        task_base_commit: <dependency-task-base-commit>
+        head_commit: <dependency-head-commit>
+        mapping_revision: 3
 has_unresolved_changes: false
 updated_at: 2026-09-10T00:00:00+08:00
 ```
@@ -462,6 +500,10 @@ updated_at: 2026-09-10T00:00:00+08:00
 - 范围先按任务需要粗粒度登记，只在扩大写入范围或发布前更新，不要求每次编辑都改清单。
 - 不同源组只有在真实路径也不重叠时才可视为独立；只读范围通常不阻塞其他任务写入，高影响生成器、链接脚本和 IDE 元数据的并发写入始终报告。
 - `completed` 或 `abandoned` 只有在 `has_unresolved_changes: false` 时才退出冲突检测。
+- 每个依赖必须引用具体 `workstream_id`、每个相关源组的 `task_base_commit`、`head_commit` 和 `mapping_revision`；不得只引用仍会变化的分支名。
+- 依赖提交必须在对应源组私有 Git 中可取回；依赖关系必须无环，并按固定提交展开。
+- 依赖任务后续产生的新提交不会自动混入当前任务；只有用户或 Agent 明确重新固定依赖后才更新依赖闭包，并重新检查冲突。
+- `task_base_commit` 可以是已固定依赖的合并起点；当前任务自己的发布差异仍只取 `task_base_commit..head_commit`，固定依赖差异按闭包另行计入。
 
 `README.md` 只供人阅读和交接，推荐结构：
 
@@ -572,16 +614,17 @@ workstream 的身份、范围、`user_baseline_commit`、`task_base_commit`、`h
 ### 发布流程
 
 1. 提醒用户一次：保存相关 IDE 和编辑器文件；第一版不处理未保存缓冲区。
-2. 冻结当前 workstream 的 `head_commit`，校验 `user_baseline_commit`、`task_base_commit`、依赖闭包和 `mapping_revision`。
+2. 在工作区 Mutex 内重新读取共享状态，冻结当前 workstream 的 `head_commit`，校验 `user_baseline_commit`、`task_base_commit`、固定依赖闭包、`mapping_revision` 和当前工作区状态。
 3. 重新扫描用户权威工程，避免覆盖刚保存的修改；扫描必须完整且所有路径可唯一映射。
-4. 使用 `user_baseline_commit`、用户当前内容和冻结的 `head_commit` 做三方比较；发布内容只来自 `task_base_commit..head_commit` 及显式依赖闭包，不能从整个集成分支推断。
-5. 生成并冻结逐文件发布清单。每项包含 `source-id`、`mapping-id`、相对路径、显式 `add|modify|delete`、基线/用户/Agent/预期结果的 blob 或 SHA-256。
+4. 使用 `user_baseline_commit`、用户当前内容和冻结的 `head_commit` 做三方比较；发布内容只来自 `task_base_commit..head_commit` 及固定依赖闭包，不能从整个集成分支推断。
+5. 生成并冻结逐文件发布清单。每项包含 `source-id`、`mapping-id`、相对路径、显式 `add|modify|delete`、基线/用户/Agent/预期结果的 blob 或 SHA-256，并记录写入前置条件。
 6. 对所有相关源完成统一 dry-run；任何三方冲突、映射歧义、范围外修改或不完整扫描都以零写入结束。
 7. 为所有相关权威源创建恢复快照和 SHA-256 清单，排除已确认可重建的缓存和构建产物。
-8. 禁止目录镜像覆盖、`/MIR`、`--delete` 或基于时间戳盲目覆盖；路径必须位于映射对应的权威根内，拒绝绝对路径注入、`..` 和链接越界。
-9. 逐文件应用清单；删除先移动到恢复区，不立即永久删除。
-10. 校验实际文件结果与冻结清单一致，再在安全可用时构建用户工程。
-11. 文件和构建结果按下述事务规则处理，最后才更新用户同步基线或构建基线。
+8. 在第一次写入前重新校验清单中所有目标：修改或删除的文件当前哈希必须仍等于 `user_hash`，新增文件必须仍不存在；任一不符都以零写入结束。
+9. 禁止目录镜像覆盖、`/MIR`、`--delete` 或基于时间戳盲目覆盖；路径必须位于映射对应的权威根内，拒绝绝对路径注入、`..` 和链接越界。
+10. 逐文件应用清单；每个文件替换前再次校验其前置哈希，使用同目录临时文件和原子替换；删除先移动到恢复区，不立即永久删除。
+11. 校验实际文件结果与冻结清单一致，再在安全可用时构建用户工程。
+12. 文件、构建和副作用结果按下述事务规则处理，最后才更新用户同步基线或构建基线。
 
 多个权威源无法形成严格的文件系统原子事务，应采用“全部预检、全部备份、逐源应用、统一校验”。
 
@@ -591,17 +634,38 @@ workstream 的身份、范围、`user_baseline_commit`、`task_base_commit`、`h
 planned -> backed_up -> applying -> applied -> file_verified -> completed
 ```
 
+事务记录还应保存 `mapping_revision`、发布清单摘要和每个文件的写入前置哈希。工作区 Mutex 只在当前变更阶段持有；进入等待用户决定的状态前先持久化状态并释放 Mutex，非终态事务仍会阻止新的导入或发布，恢复操作重新取得 Mutex 并重新校验现场。
+
 异常处理：
 
 - `conflicted`：写入前发现冲突，用户工程零写入结束。
-- `apply_failed`：路径、补丁应用或文件校验失败，自动回滚本事务已经应用的所有源；回滚成功后标记 `rolled_back`，用户同步基线不变。
+- `apply_failed`：路径、补丁应用或文件校验失败，自动回滚本事务已经应用的所有源；回滚每个文件前必须确认它仍是本事务写出的预期结果，回滚成功后标记 `rolled_back`，用户同步基线不变。
+- 如果用户或其他程序在部分应用后再次修改了待回滚文件，无法证明其仍是本事务结果时不得覆盖，立即标记 `recovery_required` 并报告现场。
 - `verification_failed`：文件已经正确发布，但用户工程构建失败。保留现场、发布差异、构建日志和恢复快照，停止自动修改、重试或重新生成，等待用户明确选择保留现状或回滚。
 - 用户选择回滚构建失败的发布时，恢复所有相关源并验证，用户同步基线保持不变。
 - 用户明确接受构建失败后的内容时，可以将该内容登记为新的用户同步基线，但对应目标和配置的 `last_successful_build_commit` 保持原值或 `null`，不得声称构建通过。
 - 构建入口不可用或不能安全执行时，可以在文件校验成功后完成发布并推进用户同步基线，但必须记录“用户工程未完成构建验证”，构建基线不变。
 - `recovery_required`：任何自动回滚失败后立即停止并报告，禁止开始新的导入或发布，直到恢复状态经过人工处理和验证。
 
-只有文件应用和校验成功，且不存在待用户决定的 `verification_failed`，才能进入 `completed` 并推进用户同步基线。只有实际构建成功才更新 `last_successful_build_commit`。
+发布事务还分别记录：
+
+```yaml
+file_publish_status: pending | verified | failed
+build_status: passed | failed | unavailable | not-run
+side_effect_status: clean | declared | review_required
+```
+
+其中 `output_paths` 和 `generated_write_paths` 的分类规则如下：
+
+- `output_paths` 只包含相对目标根目录的可重建产物、缓存和日志；只有这类路径变化时，文件发布可以正常完成，不把变化纳入用户同步基线。
+- `generated_write_paths` 包含构建时预计会修改的工程文件。它们必须互不重叠、不能越界；自动发现的路径先放在候选证据中，用户确认后才写入配置。
+- 只有已确认的 `generated_write_paths` 发生变化且构建成功时，才将变化导入源组私有 Git，作为用户构建产生的基线内容推进用户同步基线；它不能混入当前 workstream 的 `task_base_commit..head_commit` 任务差异。
+- 已确认生成路径发生变化但构建失败时进入 `verification_failed`，不推进任何基线，等待用户决定保留或回滚。
+- 出现其他工程源码、配置或 IDE 文件变化时进入 `side_effect_review_required`：文件发布结果可以保持 `verified`，但暂停推进同步基线并阻止新的导入或发布，直到用户确认其归属。
+- 用户确认某个未登记路径是正常构建行为后，将其登记为 `output_paths` 或 `generated_write_paths`；不正常的变化按恢复快照和哈希前置条件处理，不能覆盖用户后续修改。
+- 构建命令、工具、工程配置、映射或路径分类发生变化时，相关分类标为 `stale`，重新确认和验证前按未登记副作用处理。
+
+只有文件应用和校验成功，且不存在待用户决定的 `verification_failed` 或 `side_effect_review_required`，才能进入 `completed` 并推进用户同步基线。只有实际构建成功才更新 `last_successful_build_commit`。
 
 ## 软隔离和代码保护
 
@@ -666,20 +730,32 @@ Windows 工具发现顺序：
 
 不递归扫描整块磁盘。工具绝对路径和易变本机信息写入 `targets.local.yaml`。
 
-候选命令示例：
+候选命令使用结构化表示，例如：
 
-```powershell
-make -C Debug -j8
-cmake --build build --config Debug
-UV4.exe -b Project.uvprojx -t Debug
-IarBuild.exe Project.ewp -build Debug
-idf.py -C Project build
-west build
-pio run -d Project
-arduino-cli compile ...
+```yaml
+- tool: make
+  args: ["-C", "Debug", "-j8"]
+- tool: cmake
+  args: ["--build", "build", "--config", "Debug"]
+- tool: UV4
+  args: ["-b", "Project.uvprojx", "-t", "Debug"]
+- tool: IarBuild
+  args: ["Project.ewp", "-build", "Debug"]
+- tool: idf.py
+  args: ["-C", "Project", "build"]
 ```
 
 Eclipse 系厂商 IDE 的 headless 参数必须依据具体版本和工程元数据生成，不能写死。
+
+构建执行规则：
+
+- 配置保存 `tool`、参数数组和相对 `cwd`，不保存整段 Shell 命令。
+- 本机工具的实际可执行文件由 `targets.local.yaml` 中的工具 ID 解析。
+- 使用 `System.Diagnostics.ProcessStartInfo` 的 `ArgumentList` 逐项传递参数，禁止 `Invoke-Expression`、字符串拼接、管道、重定向、`;` 和 `&&`。
+- `cwd` 和所有路径参数必须在对应执行上下文允许的工程根内；拒绝 `..`、绝对路径注入和链接越界。
+- 普通初始化、开发、构建和测试使用 `execution_context: agent-copy`；发布后的用户工程验证只能由发布事务显式使用 `user-authority`，不能成为普通任务的默认写入入口。
+- 必须记录退出码、标准输出、标准错误和实际产生的预期产物。
+- 厂商环境脚本只能通过受管包装脚本调用；包装脚本、工具路径或关键参数变化后，命令标为 `stale` 并重新验证。
 
 ### 构建命令与结果状态
 
@@ -697,7 +773,7 @@ Eclipse 系厂商 IDE 的 headless 参数必须依据具体版本和工程元数
 
 - 工具存在且版本查询成功。
 - 工程、目标、配置、工作目录和输出目录明确。
-- 构建只在 Agent 副本内写入。
+- 默认构建只在 Agent 副本内写入；用户权威工程构建仅可由已冻结的发布事务在 `user-authority` 上下文中调用。
 - 不需要重新生成源码。
 - 已检查构建钩子，不包含烧录、擦除或未知外部写入。
 - 不与正在运行的 IDE 争用同一 IDE workspace。
@@ -747,7 +823,7 @@ Eclipse 系厂商 IDE 的 headless 参数必须依据具体版本和工程元数
 
 ## 敏感文件和复制策略
 
-本节规则适用于把用户工程或外部参考导入 Agent 工作区的 `agent-import`，不适用于纯净 Agent 工作区迁移前的 `recovery-backup`。恢复备份按前述要求尽量原样保存，导入副本才执行以下过滤：
+本节规则适用于把用户工程或外部参考导入 Agent 工作区的 `agent-import`；非空旧 Agent 工作区迁移直接从原目录复制，旧目录保留为外部历史参考，不创建额外初始化备份：
 
 - 默认不复制 `.git` 元数据、IDE workspace 元数据、可重建缓存和普通构建产物。
 - 确定性识别的私钥、令牌、凭据、生产签名文件、工具链授权文件、激活凭据、许可证密钥和设备转储只列出，不复制。
@@ -934,14 +1010,16 @@ workspace-management/
 
 初始化完成后，将日常任务需要的确定性脚本部署到 `workspace-management/tools/`：
 
+- `lib/workspace-common.psm1`：统一提供真实路径规范化、工作区 Mutex、原子配置写入和结构化进程执行。
 - `detect-targets.ps1`：轻量发现新增或变化的 MCU 工程。
 - `import-sources.ps1`：按可逆映射导入用户已保存变化并维护用户同步基线。
 - `import-reference.ps1`：导入只读参考工程及其来源信息。
 - `create-reference-copy.ps1`：创建带独立私有 Git 基线的任务参考副本。
 - `new-workstream.ps1`：创建或明确复用 workstream、分支、linked worktree 和机器清单。
+- `invoke-build.ps1`：解析结构化命令，在指定执行上下文中运行构建并分类文件变化。
 - `publish-workstream.ps1`：冻结任务提交，执行映射校验、三方预检、事务备份和受控发布。
 
-`init-workspace.ps1`、`plan-migration.ps1`、`backup-workspace.ps1`、`apply-migration.ps1` 和 `refresh-workspace.ps1` 仅由显式初始化 Skill 使用，不复制成普通任务可随意调用的日常入口。
+`init-workspace.ps1`、`plan-migration.ps1`、`apply-migration.ps1` 和 `refresh-workspace.ps1` 仅由显式初始化 Skill 使用，不复制成普通任务可随意调用的日常入口。所有共享状态脚本复用同一套路径规范化、工作区 Mutex、原子配置写入和结构化进程执行函数，不能各自实现不同协议。
 
 `workspace-management/templates/project-docs/` 保存 PRODUCT、SOLUTION、ROADMAP、decision 和 version 的本地格式说明或模板，使没有日常开发 Skill 的普通 Agent 也能按一致格式创建后续文档。模板只定义职责和必要字段，不包含虚构项目内容。
 
@@ -954,19 +1032,22 @@ workspace-management/
 ```yaml
 workspace_schema: 1
 policy_version: 1
+workspace_state: active
 layout_mode: pure
 managed_root: .
 initializer: embedded-workspace-init
-initialized_at: 2026-09-10T00:00:00+08:00
+initialized_at: 2026-09-12T00:00:00+08:00
 migration:
-  last_backup_id: null
-  last_notified_backup_id: null
+  migrated_from: null # 稳定的 legacy-workspace-id
+  migrated_at: null
+  source_manifest_digest: null
 ```
 
 - `workspace_schema` 表示目录和配置数据结构版本。
 - `policy_version` 表示 Agent 行为规则版本。
+- `workspace_state` 在新建或迁移期间为 `initializing`；只有完整验证后才能原子更新为 `active`。非 `active` 工作区不得执行日常开发、导入或发布。
 - `layout_mode` 固定为 `pure`，`managed_root` 固定为 `.`；其他值视为需要迁移的旧格式，不能继续日常写入。
-- `last_backup_id` 记录最近创建的迁移备份，`last_notified_backup_id` 记录已经向用户提示过的备份；两者不相等时显示一次处置提醒。
+- `migrated_from` 只记录稳定的旧工作区引用 ID；对应本机绝对路径放在被忽略的 `targets.local.yaml`。`migrated_at` 和 `source_manifest_digest` 用于说明迁移来源；旧工作区不自动纳入目标或参考工程索引。
 - Skill 自身升级不会自动迁移已有工作区；只有显式刷新并确认具体计划后才改变结构或策略版本。
 
 ### `targets.yaml`
@@ -1014,8 +1095,15 @@ targets:
     build:
       cwd: firmware/motor-controller
       configuration: Debug
-      command: make -C Debug -j8
+      default_execution_context: agent-copy
+      command:
+        tool: make
+        args: ["-C", "Debug", "-j8"]
       command_state: verified
+      output_paths:
+        - Debug/**
+      generated_write_paths:
+        - Core/Inc/version.h
       outputs:
         - Debug/motor-controller.elf
         - Debug/motor-controller.hex
@@ -1043,6 +1131,16 @@ field_metadata:
     verification: verified
     freshness: current
     evidence_ref: workspace-management/evidence/build-motor-controller.yaml
+  /targets/motor-controller/build/output_paths:
+    provenance: confirmed
+    verification: verified
+    freshness: current
+    evidence_ref: workspace-management/evidence/build-motor-controller.yaml
+  /targets/motor-controller/build/generated_write_paths:
+    provenance: confirmed
+    verification: verified
+    freshness: current
+    evidence_ref: workspace-management/evidence/build-motor-controller.yaml
   /targets/motor-controller/generated/policy:
     provenance: confirmed
     verification: unverified
@@ -1058,6 +1156,7 @@ field_metadata:
 - `verified` 只能由实际证据产生。工程路径、工具版本、命令或关键依赖变化时保留原值并标为 `stale`。
 - 用户明确修改值时将 `provenance` 设为 `confirmed`，同时清除不再适用的旧验证状态。
 - 构建失败保留命令配置并记录本次失败证据，不能把源码失败误报成命令配置失效。
+- `output_paths` 和 `generated_write_paths` 只保存已经确认的分类；自动发现但未确认的候选保留在证据中。二者必须相对目标根目录、互不重叠且解析后不越界。
 
 详细证据进入 `workspace-management/evidence/`，配置只保存简短引用。未知信息省略或使用 `null`，不能猜测。
 
@@ -1076,8 +1175,15 @@ sources:
       shared-protocol:
         source_path: D:/Shared/ProductProtocol
 
+legacy_workspaces:
+  legacy-workspace-001:
+    path: D:/Projects/OldAgentWorkspace
+
 tools:
-  cubeide: C:/Tools/STM32CubeIDE/stm32cubeide.exe
+  make:
+    executable: C:/Tools/GNU-Make/bin/make.exe
+  cubeide:
+    executable: C:/Tools/STM32CubeIDE/stm32cubeide.exe
 
 hardware:
   motor-controller:
@@ -1088,7 +1194,7 @@ hardware:
 
 不得在其中存放密钥。
 
-`mapping-id` 必须与 `targets.yaml` 一一对应。映射关系固定为 `source_path/<relative-path> <-> integration_path/integration_subpath/<relative-path>`，发布时按同一关系反向解析；任何无法唯一映射的文件直接停止。动态文件哈希、用户同步基线、构建基线和发布事务写入 `workspace-management/sync-state/`，不要频繁改写人工配置。
+具有用户权威源的源组，其 `mapping-id` 必须与 `targets.yaml` 一一对应。映射关系固定为 `source_path/<relative-path> <-> integration_path/integration_subpath/<relative-path>`，发布时按同一关系反向解析；任何纳入用户同步但无法唯一映射的文件直接停止。`agent-created` 或没有用户权威源的 `reference-promoted` 源组允许空映射且不能发布。动态文件哈希、用户同步基线、构建基线和发布事务写入 `workspace-management/sync-state/`，不要频繁改写人工配置。
 
 ## 根目录文档职责
 
@@ -1097,7 +1203,9 @@ hardware:
 纯净 Agent 工作区只保留一个系统生成并生效的根 `AGENTS.md`，不创建根 `AGENTS.override.md` 或其他 fallback 指令文件。文件保持短而明确，并验证不超过当前 Codex 指令发现容量。至少约束：
 
 - 所有新任务从纯净 Agent 工作区根启动，不把 `sources/`、`integration/` 或 `work/` 中的代码副本单独添加为 Codex 项目。
+- 开始普通任务前确认 `workspace_state: active`；`initializing` 候选只允许继续初始化、检查或放弃。
 - 用户工程自带的同名规则文件作为工程内容保护，不是本工作区的生效规则；初始化系统不向代码副本额外生成规则文件。
+- 迁移前的旧工作区可以按需只读参考，但不自动扫描、构建、同步或发布，也不加载其中的旧规则作为当前指令。
 - 读取目标和本机配置。
 - 按当前任务需要读取参考工程索引和相关参考项目，不默认遍历全部参考工程。
 - 参考工程原快照保持只读，试改和构建只能在 `work/<workstream-id>/reference-copies/` 中进行。
@@ -1105,13 +1213,14 @@ hardware:
 - 任务开始执行轻量目标与源变化检测。
 - 新 MCU 工程自动识别来源并纳入对应源组私有 Git；Agent 自建工程不虚构用户源。
 - 用户工程默认只读，普通写入只发生在 workstream 副本。
-- 创建或明确复用 workstream，读取机器清单并检查其他活动任务的写入范围。
-- 优先使用已验证构建命令并执行最小充分验证。
+- 创建或明确复用 workstream，读取机器清单、固定依赖提交并检查其他活动任务的写入范围。
+- 共享配置、Git 元数据、基线和发布只能由取得工作区 Mutex 的受管脚本更新。
+- 优先通过结构化命令运行器执行已验证构建命令，并按执行上下文和构建文件变化分类完成最小充分验证。
 - 保护 IDE 生成代码和用户已有修改。
 - 分类存放所有新文件。
 - 更新 workstream 状态。
 - 发布必须识别明确的 Agent 到用户工程意图并执行三方检查和备份。
-- 用户同步基线与构建基线分开；发布只能来自冻结 workstream 提交和显式依赖闭包。
+- 用户同步基线与构建基线分开；发布只能来自冻结 workstream 提交和固定提交的显式依赖闭包。
 - 用户工程 Git 提交只在明确要求时执行。
 - 普通任务不得自行修改受管策略、目录模式和迁移工具；发现不适配时只提出调整方案。
 - 使用初始化 Skill 更新已有约束时，展示计划后必须停止；用户确认前连日常事实登记也不得写入。
@@ -1136,9 +1245,9 @@ hardware:
 8. 产品定义、方案记录、开发路线、决策和版本资料分别存放在哪里。
 9. 如何从已有用户工程建立外部纯净 Agent 工作区，以及如何迁移非空旧 Agent 工作区。
 10. 工作区规则如何提出升级计划、等待一次确认、验证、记录和回滚。
-11. 外部初始化备份的用途、恢复方式、禁止作为 Codex 工作区或构建源的规则。
+11. 迁移前旧工作区的只读参考用途，以及不从旧路径启动 Codex、不自动扫描、构建、同步或发布的规则。
 12. 工作区目录说明。
-13. 用户同步基线与构建基线的区别，以及发布失败、发布后构建失败、同步冲突和恢复方法。
+13. 用户同步基线与构建基线的区别，以及发布失败、构建副作用、同步冲突和恢复方法。
 14. 未保存缓冲区、软隔离和板卡共享等已知边界。
 15. 唯一根 `AGENTS.md`、旧规则归档和禁止单独打开 worktree 的要求。
 
@@ -1155,6 +1264,7 @@ hardware:
 恢复同步前的工程副本。
 将 <path-or-url> 添加为参考工程。
 参考 <reference-id> 分析当前驱动，但不要修改参考工程。
+参考迁移前的旧工作区分析历史方案，但不要在那里修改或构建。
 把 <reference-id> 复制到当前任务中供试改和构建。
 将 <reference-id> 提升为正式开发工程；先作为 reference-promoted 源组，不建立用户发布映射。
 更新已有工作区约束，先只展示迁移计划。
@@ -1255,8 +1365,6 @@ embedded-workspace-init/
 |   |-- README.md
 |   |-- USER_GUIDE.md
 |   |-- directory-README.md
-|   |-- backup-AGENTS.override.md
-|   |-- backup-README.md
 |   |-- initialization-report.md
 |   |-- project-docs-README.md
 |   |-- product.md
@@ -1285,9 +1393,10 @@ embedded-workspace-init/
 |   |-- controlled-evolution.md
 |   `-- configuration-schema.md
 `-- scripts/
+    |-- lib/
+    |   `-- workspace-common.psm1
     |-- init-workspace.ps1
     |-- plan-migration.ps1
-    |-- backup-workspace.ps1
     |-- apply-migration.ps1
     |-- refresh-workspace.ps1
     |-- detect-targets.ps1
@@ -1295,6 +1404,7 @@ embedded-workspace-init/
     |-- create-reference-copy.ps1
     |-- import-sources.ps1
     |-- new-workstream.ps1
+    |-- invoke-build.ps1
     `-- publish-workstream.ps1
 ```
 
@@ -1302,7 +1412,8 @@ embedded-workspace-init/
 - 大段条件规则进入按需读取的 references。
 - 稳定生成内容放入 assets。
 - 目录创建、哈希、复制、Git 基线、差异检测和发布预检使用确定性脚本。
-- 备份包装文件、分类映射、迁移计划和规则版本由脚本生成并验证，避免依靠临时自然语言操作。
+- 路径规范化、工作区 Mutex、原子配置写入和结构化进程执行集中在共享 PowerShell 模块中，避免各脚本产生不同安全语义。
+- 分类映射、迁移计划和规则版本由脚本生成并验证，避免依靠临时自然语言操作。
 - `initialization-report.md` 可以从模板生成；实际路径、清单哈希和结果必须由脚本填入，不能保留占位值。
 - 不为目录完整而创建没有实际用途的占位资源。
 
@@ -1314,7 +1425,7 @@ embedded-workspace-init/
 2. 当前打开目录是用户工程时，Skill 只读建议外部空目录，确认前不在任一位置写入。
 3. Agent 工作区与所有用户源的真实路径互不包含；符号链接、junction 或映射造成的间接包含会阻止初始化。
 4. 非空且未初始化的候选 Agent 工作区在确认具体迁移计划前保持零写入。
-5. 旧 Agent 工作区迁移前在外部建立并验证完整恢复备份，再从快照分类重建。
+5. 非空旧 Agent 工作区迁移到新的空路径，旧目录保持不变并作为 Agent 可按需读取的外部历史参考。
 6. 配置只允许 `layout_mode: pure` 和 `managed_root: .`，不产生兼容模式或 `agent-workspace/`。
 7. 布局初始化不会在外部用户工程增加规则、说明、`.gitignore` 或 Agent 管理文件。
 8. 用户另行确认启用用户 Git时，才允许独立创建 `.git` 和必要 `.gitignore`。
@@ -1322,11 +1433,11 @@ embedded-workspace-init/
 10. 旧 Agent 规则逐字节归档，独立清单保存原路径、时间和 SHA-256，归档文件不再被 Codex 发现。
 11. 外部用户工程原有的 `AGENTS.md`、override 和 fallback 文件保持原样。
 12. 初始化系统不向 integration 或 linked worktree 添加规则文件；所有任务从纯净根目录启动。
-13. 外部备份的 override 只作为警示，机器标记和管理脚本会排除整个备份树。
+13. 旧工作区可供 Agent 只读参考，但不会自动登记目标、构建、同步或发布，也不会加载旧规则为当前指令。
 14. 单 MCU 与多 MCU 使用同一套源组和目标模型。
 15. 分散权威源通过多个稳定映射保持必要相对拓扑，不复制无关父目录。
 16. 映射便携结构位于 `targets.yaml`，本机绝对路径只位于被忽略的 `targets.local.yaml`。
-17. 每个集成文件都能唯一反向映射；目标重叠、路径越界或映射歧义会停止导入和发布。
+17. 每个纳入用户同步的集成文件都能唯一反向映射；无用户源的 Agent 自建或参考提升源组允许空映射且不可发布。
 18. 映射实际变化才递增版本；旧 workstream 或事务引用旧版本时不能发布。
 19. Agent 自建工程使用 `origin: agent-created`、`user_source: none` 和 `sync_strategy: none`。
 20. 参考工程提升后使用 `origin: reference-promoted`，不会自动虚构用户权威源。
@@ -1345,17 +1456,17 @@ embedded-workspace-init/
 33. 对话 ID不可用时仍能创建 workstream；新任务默认新建，明确续接且唯一匹配时才复用。
 34. 范围使用 `source-id + 相对路径 + access`，扩大写范围和发布前都会检查冲突。
 35. 已完成但仍有未处置修改的 workstream 继续参与冲突检测。
-36. 多个 workstream 可以独立修改和构建，重叠写入或高影响文件并发会被报告。
+36. 多个 workstream 可以独立修改和构建，重叠写入会被报告，共享管理写入由单一工作区 Mutex 串行化。
 37. 汇总集成分支可以用于验证，但不会被直接用作发布差异来源。
 38. 用户同步基线与构建基线相互独立；从未成功构建的工程仍能进行三方同步。
 39. `user_baseline_commit`、`task_base_commit` 和 `head_commit` 分别表达共同基线、任务起点和冻结结果。
 40. 用户同步基线提交由稳定 ref 保持可达，能够取回所有实际纳管且未过滤的基线内容。
 41. 文件索引记录映射、路径、类型、大小、时间和哈希，不把不完整扫描误判为删除。
 42. 活动 workstream 导入新的用户变化后会重建用户和任务基点，用户来源的内容不会混入任务发布差异。
-43. 发布只包含 `task_base_commit..head_commit` 和显式依赖闭包，不夹带其他 workstream。
-44. 冻结发布清单逐文件记录映射、操作、基线、用户、Agent 和预期结果哈希。
-45. 用户与 Agent 修改同一位置、映射变化或扫描不完整时，发布在写入前停止。
-46. 发布不会使用整目录镜像覆盖；删除显式登记并先移入恢复区。
+43. 发布只包含 `task_base_commit..head_commit` 和固定提交的显式依赖闭包，不夹带其他 workstream 的新提交。
+44. 冻结发布清单逐文件记录映射、操作、基线、用户、Agent、预期结果和写入前置哈希。
+45. 用户与 Agent 修改同一位置、映射变化、扫描不完整或写入前哈希变化时，发布在写入前停止。
+46. 发布不会使用整目录镜像覆盖；每个文件原子替换，删除显式登记并先移入恢复区。
 47. 多源发布先全部预检和备份，再逐源应用并统一校验。
 48. 路径、补丁应用或文件校验失败会自动整体回滚，用户同步基线保持不变。
 49. 文件正确发布但用户工程构建失败时保留现场和快照，等待用户选择保留或回滚。
@@ -1363,8 +1474,8 @@ embedded-workspace-init/
 51. 构建不可用时可在文件校验成功后完成发布，但明确记录用户工程未完成构建验证。
 52. 自动回滚失败会进入 `recovery_required`，阻止新的导入和发布。
 53. 所有语义等价的 Agent 到用户工程表达触发同一发布流程，方向不清才询问。
-54. 构建命令状态与单次构建结果分开；只有成功生成预期产物才建立验证证据。
-55. 副本不复用旧缓存，并使用独立 IDE workspace 完成安全初始构建。
+54. 构建命令使用工具 ID、参数数组和相对工作目录；命令状态、单次结果和构建副作用分类分开记录。
+55. 副本不复用旧缓存，并使用独立 IDE workspace 完成安全初始构建；用户工程验证只能由发布事务显式调用。
 56. `read-only` 是最高优先级模式，不创建配置、目录、日志、备份、Git 提交或构建输出。
 57. 导入保留法律和版权说明，过滤授权凭据；用途不明确的文件进入待确认清单。
 58. 疑似秘密不会自动复制或进入任何 Agent Git，高熵二进制不会被笼统排除。
@@ -1378,12 +1489,19 @@ embedded-workspace-init/
 66. 确认后的规则升级归档旧根规则，并为 Agent 管理 Git 和受影响的源组私有 Git 创建检查点；用户 Git 不会被自动提交。
 67. 日常事实更新不会夹带进待确认迁移，也不会在用户明确只读时发生。
 68. 仅刷新事实的重新扫描保持幂等；发现结构、策略、映射或 schema 迁移时整次转入计划模式。
-69. `recovery-backup` 原样保存本机状态，`agent-import` 才过滤缓存和敏感内容，两种策略不混用。
-70. 每份迁移备份有唯一 ID，通过 `last_notified_backup_id` 每份只提醒一次且永不自动删除。
+69. 旧工作区迁移直接从原目录复制到新的 `initializing` 工作区，不创建第二份初始化备份；复制发现源变化时停止并重新盘点。
+70. 新工作区记录 `migrated_from`、迁移时间和来源摘要，验证通过后才变为 `active`；旧目录不自动交换、移动或删除。
 71. `USER_GUIDE.md` 能在不了解内部脚本的情况下解释唯一工作区入口、三套 Git、双基线、同步和恢复。
 72. 没有日常开发 Skill 时，普通 Agent 仍能找到运行期脚本、配置、项目文档模板和任务状态。
 73. 初始化不会修改业务源码、修复基线错误、安装工具、烧录硬件或强制完整测试体系。
 74. 没有真实内容时不会生成空的 PRODUCT、SOLUTION 或 ROADMAP 正文。
+75. 同一工作区通过大小写、分隔符、链接或尾部分隔符的不同表示仍生成同一个 Named Mutex；锁超时不写入共享状态。
+76. 两个并行任务更新共享配置、Git ref 或 worktree 时由工作区 Mutex 串行化；锁内重读和原子替换不会丢失另一任务的更新。
+77. 构建命令通过工具 ID、参数数组和 `ProcessStartInfo.ArgumentList` 执行，路径含空格、中文或特殊字符时不经过 Shell 重新解析。
+78. 普通构建只能使用 `agent-copy` 上下文；`user-authority` 构建只能由已冻结发布事务调用。
+79. 发布后只有 `output_paths` 变化时正常完成；成功构建产生的已确认 `generated_write_paths` 会作为用户构建内容导入基线，不进入任务发布差异。
+80. 构建失败并修改生成文件，或出现未登记工程文件副作用时，不推进同步基线；后者进入 `side_effect_review_required` 并阻止新的导入和发布。
+81. 非空旧 Agent 工作区直接迁移到新的 `initializing` 路径，旧目录保持不变并可供 Agent 按需只读参考；源变化或验证失败不会启用新工作区。
 
 ## 已明确删除或暂缓的设计
 
@@ -1398,6 +1516,10 @@ embedded-workspace-init/
 - 不创建日常开发 Skill，等实际重复需求出现后再决定。
 - 不使用固定同步口令。
 - 不进行后台实时监控。
+- 不为发布事务进程中断增加独立日志恢复协议；第一版只保留现有事务状态、快照和人工恢复门槛。
+- 不为同步过滤集合增加独立版本号；映射版本、文件索引和当前配置按现有模型处理。
+- 不额外处理 Git clean/smudge、LFS 或换行转换的逐字节恢复语义；发布恢复依赖当前文件哈希和恢复快照。
+- 不为非空旧工作区迁移再创建内容相同的初始化备份，也不实现原路径目录交换。
 
 ## 成功标准
 
@@ -1409,7 +1531,7 @@ embedded-workspace-init/
 - 多权威源、多 MCU 和多对话并行均能被同一模型表达。
 - 已有用户工程可以无损导入外部 Agent 工作区，旧 Agent 工作区可以经确认迁移；参考工程与权威源、集成副本和 workstream 的职责始终清晰分离。
 - 未确认的已有工作区迁移或约束升级不会产生任何写入；确认后的变化可验证、可审计、可回滚。
-- 用户同步基线、workstream 任务基线和构建基线职责分离，发布只包含冻结任务提交和显式依赖。
+- 用户同步基线、workstream 任务基线和构建基线职责分离，发布只包含冻结任务提交和固定提交的显式依赖。
 - 活跃 Agent 工作区只保留一个根 `AGENTS.md`；旧规则可追溯但不再生效。
 - 复杂机械操作由已验证脚本完成，规则文档保持精简。
 - 发生冲突时停止覆盖；发生可恢复故障时存在基线或快照。
