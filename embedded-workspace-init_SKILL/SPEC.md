@@ -167,7 +167,7 @@ $embedded-workspace-init 将 <path-or-url> 导入为参考工程，仅供 Agent 
 第一版运行边界：
 
 - 仅支持同一台 Windows 主机上的本地工作区和本地管理脚本，不承诺跨主机、网络共享目录或 WSL 与 Windows 并发访问时的互斥一致性。
-- 工作区真实根路径记录在本机配置中。普通任务开始时必须确认当前真实根路径与该值一致，且本机配置存在；不一致时只报告并停止写入。
+- 初始化计划阶段只读解析候选工作区真实根路径；用户确认后，在 `workspace_state: initializing` 阶段将该路径写入本机配置，并在切换为 `active` 前重新校验。只有已经激活的工作区在普通任务开始时才要求本机配置必须存在且当前真实根路径与记录值一致；不一致时只报告并停止写入。
 - 初始化和日常检查必须实际读取所有已登记用户源和旧工作区参考路径。路径不存在或当前权限不可读时列出具体路径并停止对应操作，不自动修改系统权限。
 - 第一版要求同一用户权威源同时只归属于一个 `workspace_state: active` 的 Agent 工作区。初始化计划必须声明这一限制；发现已知冲突时停止，不引入跨工作区锁或全局注册表。
 - Codex-managed worktree 只检出 Agent 管理 Git 跟踪的内容，而源码副本、本机配置和同步状态均被该 Git 忽略，因此不得使用 `.worktreeinclude` 绕过本限制复制整套受管状态。
@@ -271,7 +271,7 @@ $embedded-workspace-init 将 <path-or-url> 导入为参考工程，仅供 Agent 
 4. 首次接入非空目录或需要策略、结构、映射或 schema 迁移时只读展示具体计划；用户确认后才写入。纯事实重新扫描不走迁移流程。
 5. 识别源组、可逆映射、三套 Git 边界、共享路径和嵌套仓库。
 6. 扫描疑似敏感文件、授权凭据和应排除的可重建缓存。
-7. 新工作区先标记为 `workspace_state: initializing`，再创建或确认 Agent 管理 Git；按源组创建集成副本并保持必要拓扑。
+7. 新工作区先标记为 `workspace_state: initializing`，将已经确认的真实根路径写入 `targets.local.json`，再创建或确认 Agent 管理 Git；按源组创建集成副本并保持必要拓扑。
 8. 为每个源组自动建立或确认源组私有 Git；`user-imported` 源组创建可取回内容的首次用户同步基线，其他正式源组创建初始代码基线。
 9. 发现 MCU 工程，生成稳定 `target-id` 并写入目标配置和最小字段元数据。
 10. 识别或导入用户明确提供的参考工程，并与开发源严格区分。
@@ -360,6 +360,7 @@ chore: establish embedded project baseline
 
 - 根 `AGENTS.md`、`README.md` 和 `USER_GUIDE.md`。
 - `project-docs/`、参考工程包装说明和索引。
+- 固定目录骨架及其职责 `README.md`。
 - 可移植配置、运行指南、JSON schema、管理工具、模板、迁移历史、workstream 的 `README.md` 与 `workstream.json`。
 
 它必须忽略由其他仓库或本机状态负责的内容：
@@ -367,8 +368,12 @@ chore: establish embedded project baseline
 - `sources/*/integration/`。
 - `work/*/sources/` 和 `work/*/reference-copies/`。
 - `reference-projects/*/project/`。
-- `targets.local.json`、`sync-state/`、`evidence/`、`recovery/` 和 IDE workspace 状态。
+- `targets.local.json`。
+- `workspace-management/sync-state/` 中除固定骨架 `README.md` 外的动态状态和索引。
+- `workspace-management/evidence/`、`workspace-management/recovery/` 和 `workspace-management/ide-workspaces/` 中除各自固定骨架 `README.md` 外的证据、恢复快照和 IDE workspace 状态。
 - 构建产物、下载内容、大型日志及明确的任务临时文件。
+
+`.gitignore` 必须先允许 Git 遍历上述固定骨架目录，再重新纳入根级及 `sync-state/sources/`、`sync-state/indexes/`、`sync-state/transactions/` 中的 `README.md`；不能只写深层否定规则而让父目录仍被整体排除。动态内容保持忽略，职责 README 必须由 Agent 管理 Git 跟踪。
 
 有长期价值的小型任务脚本可以纳入管理 Git；临时生成物不得借此进入历史。管理 Git 不配置可写推送流程，不包含用户权威工程或源组代码。
 
@@ -1058,6 +1063,7 @@ workspace-management/
 |   |-- workstream.schema.json
 |   |-- source-sync-state.schema.json
 |   |-- publish-transaction.schema.json
+|   |-- evidence.schema.json
 |   `-- legacy-instructions-manifest.schema.json
 |-- tools/
 |   `-- README.md
@@ -1105,7 +1111,7 @@ workspace-management/
 - 后续普通 Agent 需要的本地模板进入 `workspace-management/templates/`；不得依赖初始化 Skill 安装目录中的隐藏资源。
 - 分析报告、日志摘要和导出物进入当前 workstream 的 `artifacts/`。
 - 同步状态进入 `workspace-management/sync-state/`。
-- 构建和验证证据进入 `workspace-management/evidence/`；配置中只保存简短引用。
+- 构建和验证的结构化证据进入 `workspace-management/evidence/`；配置中只保存简短引用。证据 JSON 使用 `evidence/<kind>-<target-id>[-<build-id>].json` 形式的稳定名称，并由 `evidence.schema.json` 校验；大型 stdout、stderr、二进制报告和厂商原生日志保持其合适格式，由证据 JSON 记录相对路径、媒体类型和 SHA-256，不嵌入 JSON 正文。
 - 发布恢复快照进入 `workspace-management/recovery/<publish-id>/`。
 - IDE 独立 workspace 元数据进入 `workspace-management/ide-workspaces/`，不与用户 IDE workspace 混用。
 - 每个职责边界目录必须包含 `README.md`，说明用途、所有权、Git 状态和清理规则。
@@ -1151,8 +1157,11 @@ workspace-management/
 工作区机器配置和动态状态统一使用 UTF-8 JSON/JSONL，不依赖外部 YAML 模块：
 
 - 每类 JSON 都有受管 schema；字段说明进入 `configuration-schema.md` 或 schema 的 `description`，不依赖 JSON 注释，也不把机器字段手册塞进 `USER_GUIDE.md`。
-- PowerShell 序列化必须显式指定足够覆盖 schema 的 `ConvertTo-Json -Depth`，将深度警告视为失败；临时文件写入后重新解析、按 schema 验证并检查关键字段的往返一致性，再执行原子替换。
+- 每份 schema 必须为根对象和所有已知嵌套节点声明 `type`，把读取和安全判断必需的字段列入 `required`，并用 `enum` 约束有限状态值。关键校验不得只依赖 `format`；日期、ID、哈希或路径需要强制语法时使用 schema `pattern` 或确定性脚本校验。
+- PowerShell 序列化必须显式指定足够覆盖 schema 的 `ConvertTo-Json -Depth`，将深度警告视为失败；临时文件写入后重新解析、按 schema 验证，并比较序列化前后 schema 关键路径的类型、值、数组长度和对象键，再执行原子替换。仅确认 `ConvertFrom-Json` 能重新解析不是往返一致性验证。
 - JSONL 每行必须是一个完整 JSON 对象；读取失败或出现半行时视为状态不完整，不继续写入或把缺失记录解释为删除。
+- 深度验证必须包含反例：故意以不足的 `ConvertTo-Json -Depth` 序列化多层配置，确认产生警告、嵌套对象发生类型变化，且结果被 schema 或往返类型比较拒绝，不能进入原子替换。
+- 结构化证据统一使用 JSON，并由 `evidence.schema.json` 定义公共信封。公共必需字段至少包括 `schema`、`evidence_id`、`kind`、`captured_at`、`subject`、`result` 和 `artifacts`；`artifacts` 只保存原始产物引用及可用哈希，按 `kind` 需要的详细字段由 schema 约束。证据正文被 Agent 管理 Git 忽略，`evidence/README.md` 属于固定骨架并由 Agent 管理 Git 跟踪。
 - 用户在 2026-09-13 提供的系统终端截图显示 PowerShell `7.6.6`，将其作为当前主机基准；Codex 内部运行时可能不同，因此实现和验收仍须记录脚本实际调用的 PowerShell 可执行文件路径、版本及 JSON/schema 能力，不能用另一个终端或运行时的版本替代。
 - PSGallery 可达性、目标 PowerShell 对深层 JSON 的具体默认行为和 schema 能力必须在后续实现验收中实测，不在设计阶段预判；运行时不得安装解析依赖，也不能依赖默认序列化深度。
 
@@ -1368,7 +1377,7 @@ workspace-management/
 
 不得在其中存放密钥。
 
-`workspace.root_path` 保存初始化完成时解析得到的纯净工作区真实路径。普通任务必须在 Codex `Local` 环境中从该路径启动；本机配置缺失、当前根路径不符或检测到外层 Codex-managed worktree 时不得写入。
+`workspace.root_path` 的生命周期分为三段：初始化计划阶段只读解析候选真实根路径；用户确认后，在 `workspace_state: initializing` 阶段写入 `targets.local.json`；切换为 `active` 前重新解析并确认记录值仍与实际根路径一致。初始化期间文件尚未创建属于正常状态，不适用“本机配置缺失时不得写入”；只有激活后的普通任务才必须在 Codex `Local` 环境中从该路径启动，本机配置缺失、当前根路径不符或检测到外层 Codex-managed worktree 时不得写入。
 
 具有用户权威源的源组，其 `mapping-id` 必须与 `targets.json` 一一对应。映射关系固定为 `source_path/<relative-path> <-> integration_path/integration_subpath/<relative-path>`，发布时按同一关系反向解析；任何纳入用户同步但无法唯一映射的文件直接停止。`agent-created` 或没有用户权威源的 `reference-promoted` 源组允许空映射且不能发布。动态文件哈希、用户同步基线、构建基线和发布事务写入 `workspace-management/sync-state/`，不要频繁改写人工配置。
 
@@ -1572,6 +1581,7 @@ embedded-workspace-init/
 |       |-- workstream.schema.json
 |       |-- source-sync-state.schema.json
 |       |-- publish-transaction.schema.json
+|       |-- evidence.schema.json
 |       `-- legacy-instructions-manifest.schema.json
 |-- references/
 |   |-- lifecycle-and-migration.md
@@ -1628,7 +1638,7 @@ P1 不使用固定实施顺序，按真实触发条件选择专项门禁：非�
 - `CORE-06` `[P0; 原 9]`：活跃 Agent 工作区只有一个系统生成的根 `AGENTS.md`，没有根 override 或 fallback 规则。
 - `MIG-03` `[P1; 原 10]`：旧 Agent 规则逐字节归档，独立清单保存原路径、时间和 SHA-256，归档文件不再被 Codex 发现。
 - `CORE-07` `[P1; 原 11]`：外部用户工程原有的 `AGENTS.md`、override 和 fallback 文件保持原样。
-- `CORE-08` `[P0; 原 12]`：初始化系统不向 integration 或 linked worktree 添加规则文件；所有任务从 `targets.local.json` 登记的真实根目录以 Codex `Local` 环境启动，根路径不符或外层 Codex-managed/permanent worktree 会只读停止。
+- `CORE-08` `[P0; 原 12]`：初始化系统不向 integration 或 linked worktree 添加规则文件；初始化在用户确认后于 `initializing` 阶段建立 `workspace.root_path` 并在激活前复核，之后所有任务从该真实根目录以 Codex `Local` 环境启动，配置缺失、根路径不符或外层 Codex-managed/permanent worktree 会只读停止。
 - `MIG-04` `[P1; 原 13]`：旧工作区可供 Agent 只读参考，但不会自动登记目标、构建、同步或发布，也不会加载旧规则为当前指令。
 - `MAP-01` `[P1; 原 14]`：单 MCU 与多 MCU 使用同一套源组和目标模型。
 - `MAP-02` `[P1; 原 15]`：分散权威源通过多个稳定映射保持必要相对拓扑，不复制无关父目录。
@@ -1642,8 +1652,8 @@ P1 不使用固定实施顺序，按真实触发条件选择专项门禁：非�
 - `MAP-09` `[P1; 原 23]`：稀疏 `field_metadata` 能区分来源、验证和新鲜度，扫描不会覆盖用户确认值。
 - `BUILD-01` `[P1; 原 24]`：工程、工具或构建配置变化后，相关已验证字段会变为 `stale`；稳定 `build-id` 不因 IDE 显示名称变化而自动改变。
 - `GIT-02` `[P0; 原 25]`：用户工程 Git、Agent 管理 Git 和源组私有 Git 的边界互不混淆；所有 Git 命令显式指定仓库，根 Git 状态不冒充源码状态。
-- `GIT-03` `[P0; 原 26]`：Agent 管理 Git只跟踪规则、可移植配置、项目知识、工具、模板、历史和任务元数据，并按管理操作边界自动创建不夹带无关文件的检查点。
-- `GIT-04` `[P0; 原 27]`：Agent 管理 Git会忽略代码仓库、参考正文、本机配置、同步状态、证据、恢复数据和 IDE 状态。
+- `GIT-03` `[P0; 原 26]`：Agent 管理 Git只跟踪规则、固定骨架职责 README、可移植配置、项目知识、指南、schema、工具、模板、历史和任务元数据，并按管理操作边界自动创建不夹带无关文件的检查点。
+- `GIT-04` `[P0; 原 27]`：Agent 管理 Git会忽略代码仓库、参考正文、本机配置以及动态同步状态、证据正文、恢复数据和 IDE 状态，但会重新纳入这些目录的固定骨架 README；嵌套 README 的父目录也保持可遍历和可跟踪。
 - `GIT-05` `[P1; 原 28]`：用户工程有 Git时不会自动提交或推送；无 Git时同意、拒绝和无回应进入正确状态。
 - `GIT-06` `[P0; 原 29]`：每个受支持源组自动拥有独立私有 Git 和必要检查点；每个 `user-imported` 源组另有稳定用户基线 ref，所有私有 Git 均不向用户仓库推送。
 - `GIT-07` `[P1; 原 30]`：普通单 Git 用户源的私有 clone能导入已保存的 dirty 和必要 untracked 内容；submodule、嵌套 Git、既有 worktree 或 LFS 会暂停该源组并展示拓扑，不被自动展平。
@@ -1701,8 +1711,9 @@ P1 不使用固定实施顺序，按真实触发条件选择专项门禁：非�
 
 本次轻量化新增以下验收：
 
-- `DATA-01` `[P0; 新]`：除 `agents/openai.yaml` 和 Skill frontmatter 外，工作区结构化配置、状态、证据索引和机器清单统一使用符合 schema 的 JSON/JSONL，不依赖外部 YAML 解析模块；原生构建日志和其他非结构化产物保持其合适格式。
-- `DATA-02` `[P0; 新]`：JSON 写入显式设置序列化深度，将深度警告视为失败，并通过重新解析、schema 和关键字段往返检查后才原子替换；测试证据记录实际 PowerShell 路径和版本。
+- `DATA-01` `[P0; 新]`：除 `agents/openai.yaml` 和 Skill frontmatter 外，工作区结构化配置、状态、证据和机器清单统一使用符合 schema 的 JSON/JSONL，不依赖外部 YAML 解析模块；原生构建日志和其他非结构化产物保持其合适格式并由证据 JSON 引用。
+- `DATA-02` `[P0; 新]`：JSON 写入显式设置序列化深度，将深度警告视为失败，并通过重新解析、含 `required|type|enum` 的 schema 以及关键路径类型和值往返比较后才原子替换；测试包含深度不足反例，并记录实际 PowerShell 路径和版本。
+- `DATA-03` `[P0; 新]`：结构化证据符合 `evidence.schema.json` 的公共信封；原始日志和二进制报告保持独立并由相对路径、媒体类型和可用 SHA-256 引用，证据正文被忽略而固定 `evidence/README.md` 由 Agent 管理 Git 跟踪。
 - `CONTEXT-01` `[P0; 新]`：`SKILL.md` 和根 `AGENTS.md` 的大小预算是软目标；超限时先去重和路由条件流程，任何安全规则都不会为满足预算而删除。
 - `CONTEXT-02` `[P0; 新]`：普通任务只加载当前任务需要的指南、目标和状态，脚本默认只返回摘要，不读取完整 SPEC、全部参考工程、完整索引、历史事务或完整日志。
 - `SYNC-17` `[P0; 新]`：不创建 `sync-state/workstreams/`；逐源比较按需从源组状态、文件索引和 `workstream.json` 计算，结果不成为新的权威状态。
