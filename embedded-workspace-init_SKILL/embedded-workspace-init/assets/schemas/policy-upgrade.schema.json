@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local.invalid/embedded-workspace-init/policy-upgrade.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "upgrade_id", "applied_at", "approval_digest", "old_management_head", "current_workspace_schema", "target_workspace_schema", "current_policy_version", "target_policy_version", "operations", "local_state_migration", "source_state_migrations", "archived_root_rule"],
+  "properties": {
+    "schema": { "type": "integer", "const": 1 },
+    "upgrade_id": { "type": "string", "pattern": "^policy-upgrade-[a-z0-9-]+$" },
+    "applied_at": { "$ref": "#/definitions/timestamp" },
+    "approval_digest": { "$ref": "#/definitions/hash" },
+    "old_management_head": { "$ref": "#/definitions/commit" },
+    "current_workspace_schema": { "type": "integer", "minimum": 1 },
+    "target_workspace_schema": { "type": "integer", "minimum": 1 },
+    "current_policy_version": { "type": "integer", "minimum": 1 },
+    "target_policy_version": { "type": "integer", "minimum": 1 },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "action", "current_hash", "target_hash"],
+        "properties": {
+          "path": { "$ref": "#/definitions/relativePath" },
+          "action": { "type": "string", "enum": ["add", "replace"] },
+          "current_hash": { "$ref": "#/definitions/nullableHash" },
+          "target_hash": { "$ref": "#/definitions/hash" }
+        }
+      }
+    },
+    "local_state_migration": { "type": ["string", "null"], "enum": ["add-deferred-user-git", null] },
+    "source_state_migrations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_id", "state_hash", "target_mapping_digest"],
+        "properties": {
+          "source_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+          "state_hash": { "$ref": "#/definitions/hash" },
+          "target_mapping_digest": { "$ref": "#/definitions/hash" }
+        }
+      }
+    },
+    "archived_root_rule": {
+      "oneOf": [
+        { "$ref": "#/definitions/relativePath" },
+        { "type": "null" }
+      ]
+    }
+  },
+  "definitions": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "nullableHash": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "commit": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$" },
+    "relativePath": { "type": "string", "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+$" },
+    "timestamp": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$" }
+  }
+}

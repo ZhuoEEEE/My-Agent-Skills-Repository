@@ -1,0 +1,82 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local.invalid/embedded-workspace-init/publish-transaction.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "publish_id", "workstream_id", "state", "created_at", "updated_at", "mapping_revisions", "head_commits", "manifest", "manifest_digest", "recovery_path", "file_publish_status", "build_status", "side_effect_status", "side_effects", "build_target_id", "build_id", "build_evidence_ref", "message"],
+  "properties": {
+    "schema": { "type": "integer", "const": 1 },
+    "publish_id": { "type": "string", "pattern": "^publish-[a-z0-9-]+$" },
+    "workstream_id": { "type": "string", "pattern": "^\\d{8}-[a-z0-9][a-z0-9-]{0,47}-[a-f0-9]{4}$" },
+    "state": { "type": "string", "enum": ["planned", "backed_up", "applying", "applied", "file_verified", "completed", "conflicted", "apply_failed", "rolled_back", "verification_failed", "side_effect_review_required", "recovery_required"] },
+    "created_at": { "$ref": "#/definitions/timestamp" },
+    "updated_at": { "$ref": "#/definitions/timestamp" },
+    "mapping_revisions": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "head_commits": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "pattern": "^[0-9a-fA-F]{7,64}$" }
+    },
+    "manifest": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_id", "mapping_id", "relative_path", "operation", "baseline_hash", "user_hash", "agent_hash", "expected_hash", "precondition_hash"],
+        "properties": {
+          "source_id": { "$ref": "#/definitions/id" },
+          "mapping_id": { "$ref": "#/definitions/id" },
+          "relative_path": { "$ref": "#/definitions/relativePath" },
+          "operation": { "type": "string", "enum": ["add", "modify", "delete"] },
+          "baseline_hash": { "$ref": "#/definitions/nullableHash" },
+          "user_hash": { "$ref": "#/definitions/nullableHash" },
+          "agent_hash": { "$ref": "#/definitions/nullableHash" },
+          "expected_hash": { "$ref": "#/definitions/nullableHash" },
+          "precondition_hash": { "$ref": "#/definitions/nullableHash" }
+        }
+      }
+    },
+    "manifest_digest": { "$ref": "#/definitions/hash" },
+    "recovery_path": {
+      "oneOf": [
+        { "$ref": "#/definitions/relativePath" },
+        { "type": "null" }
+      ]
+    },
+    "file_publish_status": { "type": "string", "enum": ["pending", "verified", "failed"] },
+    "build_status": { "type": "string", "enum": ["passed", "failed", "unavailable", "not-run"] },
+    "side_effect_status": { "type": "string", "enum": ["clean", "declared", "review_required"] },
+    "side_effects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "before_hash", "after_hash", "classification"],
+        "properties": {
+          "path": { "$ref": "#/definitions/relativePath" },
+          "before_hash": { "$ref": "#/definitions/nullableHash" },
+          "after_hash": { "$ref": "#/definitions/nullableHash" },
+          "classification": { "type": "string", "enum": ["output", "generated-write", "review-required"] }
+        }
+      }
+    },
+    "build_target_id": { "type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+    "build_id": { "type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+    "build_evidence_ref": {
+      "oneOf": [
+        { "$ref": "#/definitions/relativePath" },
+        { "type": "null" }
+      ]
+    },
+    "message": { "type": ["string", "null"] }
+  },
+  "definitions": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "nullableHash": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "relativePath": { "type": "string", "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+$" },
+    "timestamp": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$" }
+  }
+}

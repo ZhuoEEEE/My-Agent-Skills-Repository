@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "source_id": "template-source",
+  "mapping_revision": 0,
+  "mapping_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "user_baseline_id": null,
+  "user_baseline_commit": null,
+  "user_baseline_ref": null,
+  "captured_at": "1970-01-01T00:00:00Z",
+  "scan_complete": true,
+  "file_index": "../indexes/template-source.jsonl",
+  "build_baselines": {}
+}

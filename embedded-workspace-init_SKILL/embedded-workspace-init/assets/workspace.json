@@ -1,0 +1,13 @@
+{
+  "workspace_schema": 1,
+  "policy_version": 1,
+  "workspace_state": "initializing",
+  "layout_mode": "pure",
+  "managed_root": ".",
+  "initializer": "embedded-workspace-init",
+  "initialized_at": "1970-01-01T00:00:00Z",
+  "migration": {
+    "migrated_from": null,
+    "migrated_at": null
+  }
+}

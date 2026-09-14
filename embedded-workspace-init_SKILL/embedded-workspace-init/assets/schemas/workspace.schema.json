@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local.invalid/embedded-workspace-init/workspace.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "workspace_schema",
+    "policy_version",
+    "workspace_state",
+    "layout_mode",
+    "managed_root",
+    "initializer",
+    "initialized_at",
+    "migration"
+  ],
+  "properties": {
+    "workspace_schema": { "type": "integer", "const": 1 },
+    "policy_version": { "type": "integer", "const": 1 },
+    "workspace_state": { "type": "string", "enum": ["initializing", "active"] },
+    "layout_mode": { "type": "string", "const": "pure" },
+    "managed_root": { "type": "string", "const": "." },
+    "initializer": { "type": "string", "const": "embedded-workspace-init" },
+    "initialized_at": { "$ref": "#/definitions/timestamp" },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["migrated_from", "migrated_at"],
+      "properties": {
+        "migrated_from": {
+          "type": ["string", "null"],
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+        },
+        "migrated_at": {
+          "oneOf": [
+            { "$ref": "#/definitions/timestamp" },
+            { "type": "null" }
+          ]
+        }
+      }
+    }
+  },
+  "definitions": {
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+    }
+  }
+}

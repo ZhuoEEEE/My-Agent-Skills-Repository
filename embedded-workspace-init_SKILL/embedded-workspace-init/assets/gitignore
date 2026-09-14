@@ -1,0 +1,25 @@
+# Agent-management Git owns metadata, not source bodies or machine state.
+/workspace-management/config/targets.local.json
+/sources/*/integration/
+/work/*/sources/
+/work/*/reference-copies/*/project/
+/reference-projects/*/project/
+/workspace-management/sync-state/sources/*
+!/workspace-management/sync-state/sources/README.md
+/workspace-management/sync-state/indexes/*
+!/workspace-management/sync-state/indexes/README.md
+/workspace-management/sync-state/transactions/*
+!/workspace-management/sync-state/transactions/README.md
+/workspace-management/evidence/*
+!/workspace-management/evidence/README.md
+/workspace-management/recovery/*
+!/workspace-management/recovery/README.md
+/workspace-management/ide-workspaces/*
+!/workspace-management/ide-workspaces/README.md
+*.log
+*.tmp
+*.bak
+*.elf
+*.hex
+*.bin
+*.map

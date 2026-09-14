@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "workspace": {
+    "root_path": "C:/replace/with/real/workspace/path",
+    "execution_environment": "local"
+  },
+  "sources": {},
+  "legacy_workspaces": {},
+  "tools": {},
+  "hardware": {}
+}

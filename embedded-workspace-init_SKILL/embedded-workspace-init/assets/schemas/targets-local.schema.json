@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local.invalid/embedded-workspace-init/targets-local.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "workspace", "sources", "legacy_workspaces", "tools", "hardware"],
+  "properties": {
+    "schema": { "type": "integer", "const": 1 },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root_path", "execution_environment"],
+      "properties": {
+        "root_path": { "$ref": "#/definitions/localPath" },
+        "execution_environment": { "type": "string", "const": "local" }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/definitions/id" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mappings"],
+        "properties": {
+          "mappings": {
+            "type": "object",
+            "propertyNames": { "$ref": "#/definitions/id" },
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["source_path", "user_git"],
+              "properties": {
+                "source_path": { "$ref": "#/definitions/localPath" },
+                "user_git": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["status", "repository_path"],
+                  "properties": {
+                    "status": { "type": "string", "enum": ["deferred", "disabled", "enabled"] },
+                    "repository_path": {
+                      "oneOf": [
+                        { "$ref": "#/definitions/localPath" },
+                        { "type": "null" }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "legacy_workspaces": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/definitions/id" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path"],
+        "properties": { "path": { "$ref": "#/definitions/localPath" } }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/definitions/id" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["executable"],
+        "properties": {
+          "executable": { "$ref": "#/definitions/localPath" },
+          "version": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "hardware": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/definitions/id" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "probe": { "type": ["string", "null"] },
+          "probe_serial": { "type": ["string", "null"] },
+          "serial_port": { "type": ["string", "null"] }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+    "localPath": { "type": "string", "pattern": "^[A-Za-z]:[/\\\\].+" }
+  }
+}

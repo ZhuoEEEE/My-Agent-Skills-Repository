@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local.invalid/embedded-workspace-init/workstream.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "status", "title", "conversation", "scope", "agent", "dependencies", "has_unresolved_changes", "updated_at"],
+  "properties": {
+    "schema": { "type": "integer", "const": 1 },
+    "id": { "$ref": "#/definitions/workstreamId" },
+    "status": { "type": "string", "enum": ["active", "paused", "blocked", "completed", "abandoned"] },
+    "title": { "type": "string", "minLength": 1 },
+    "conversation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary"],
+      "properties": {
+        "primary": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "host_id": { "type": ["string", "null"] },
+                "thread_id": { "type": ["string", "null"] }
+              }
+            },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "scope": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_id", "targets", "paths"],
+        "properties": {
+          "source_id": { "$ref": "#/definitions/id" },
+          "targets": { "type": "array", "items": { "$ref": "#/definitions/id" } },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "access"],
+              "properties": {
+                "path": { "$ref": "#/definitions/relativePath" },
+                "access": { "type": "string", "enum": ["read", "write"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["refs"],
+      "properties": {
+        "refs": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/id" },
+          "additionalProperties": { "$ref": "#/definitions/sourceRef" }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workstream_id", "refs"],
+        "properties": {
+          "workstream_id": { "$ref": "#/definitions/workstreamId" },
+          "refs": {
+            "type": "object",
+            "propertyNames": { "$ref": "#/definitions/id" },
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["task_base_commit", "head_commit", "mapping_revision"],
+              "properties": {
+                "task_base_commit": { "$ref": "#/definitions/commit" },
+                "head_commit": { "$ref": "#/definitions/commit" },
+                "mapping_revision": { "type": "integer", "minimum": 0 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "has_unresolved_changes": { "type": "boolean" },
+    "updated_at": { "$ref": "#/definitions/timestamp" }
+  },
+  "definitions": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+    "workstreamId": { "type": "string", "pattern": "^\\d{8}-[a-z0-9][a-z0-9-]{0,47}-[a-f0-9]{4}$" },
+    "relativePath": { "type": "string", "pattern": "^(?:\\.|(?![A-Za-z]:)(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+)$" },
+    "commit": { "type": ["string", "null"], "pattern": "^[0-9a-fA-F]{7,64}$" },
+    "timestamp": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$" },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["branch", "worktree", "mapping_revision", "user_baseline_commit", "task_base_commit", "head_commit"],
+      "properties": {
+        "branch": { "type": "string", "pattern": "^workstream/" },
+        "worktree": { "$ref": "#/definitions/relativePath" },
+        "mapping_revision": { "type": "integer", "minimum": 0 },
+        "user_baseline_commit": { "$ref": "#/definitions/commit" },
+        "task_base_commit": { "$ref": "#/definitions/commit" },
+        "head_commit": { "$ref": "#/definitions/commit" }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "publish_id": "publish-19700101-template-0000",
+  "workstream_id": "19700101-template-0000",
+  "state": "planned",
+  "created_at": "1970-01-01T00:00:00Z",
+  "updated_at": "1970-01-01T00:00:00Z",
+  "mapping_revisions": {},
+  "head_commits": {},
+  "manifest": [],
+  "manifest_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "recovery_path": null,
+  "file_publish_status": "pending",
+  "build_status": "not-run",
+  "side_effect_status": "clean",
+  "side_effects": [],
+  "build_target_id": null,
+  "build_id": null,
+  "build_evidence_ref": null,
+  "message": null
+}

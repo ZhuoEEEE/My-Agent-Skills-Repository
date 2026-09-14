@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://local.invalid/embedded-workspace-init/source-sync-state.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "source_id", "mapping_revision", "mapping_digest", "user_baseline_id", "user_baseline_commit", "user_baseline_ref", "captured_at", "scan_complete", "file_index", "build_baselines"],
+  "properties": {
+    "schema": { "type": "integer", "const": 1 },
+    "source_id": { "$ref": "#/definitions/id" },
+    "mapping_revision": { "type": "integer", "minimum": 0 },
+    "mapping_digest": { "$ref": "#/definitions/hash" },
+    "user_baseline_id": { "type": ["string", "null"], "pattern": "^baseline-[a-z0-9-]+$" },
+    "user_baseline_commit": { "type": ["string", "null"], "pattern": "^[0-9a-fA-F]{7,64}$" },
+    "user_baseline_ref": { "type": ["string", "null"], "pattern": "^refs/agent/user-baselines/" },
+    "captured_at": { "$ref": "#/definitions/timestamp" },
+    "scan_complete": { "type": "boolean" },
+    "file_index": { "type": "string", "pattern": "^\\.\\./indexes/[a-z0-9][a-z0-9-]{0,63}\\.jsonl$" },
+    "build_baselines": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["last_successful_build_commit", "evidence_ref"],
+        "properties": {
+          "last_successful_build_commit": { "type": ["string", "null"], "pattern": "^[0-9a-fA-F]{7,64}$" },
+          "evidence_ref": { "type": ["string", "null"] }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "timestamp": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$" },
+    "relativePath": { "type": "string", "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+$" }
+  }
+}

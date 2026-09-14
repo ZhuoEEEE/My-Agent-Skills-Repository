@@ -1,0 +1,7 @@
+interface:
+  display_name: "Embedded Workspace Init"
+  short_description: "Initialize isolated embedded development workspaces safely"
+  default_prompt: "Use $embedded-workspace-init to initialize or safely refresh this embedded workspace."
+
+policy:
+  allow_implicit_invocation: false
