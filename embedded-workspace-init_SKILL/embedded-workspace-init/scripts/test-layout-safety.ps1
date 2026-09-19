@@ -243,7 +243,7 @@ try {
     $rootRules = Get-Content -Raw -LiteralPath (Join-Path $workspace 'AGENTS.md')
     foreach ($guide in $guideNames) { Assert-True ($rootRules.Contains("workspace-management/guides/$guide")) "root rules must route to $guide" }
     $userGuide = Get-Content -Raw -LiteralPath (Join-Path $workspace 'USER_GUIDE.md')
-    foreach ($term in @('Local', 'Agent 管理 Git', '源组私有 Git', '用户工程 Git', '用户同步基线', '构建基线', 'recovery_required')) {
+    foreach ($term in @('Local', 'Agent 管理 Git', '源组私有 Git', '用户工程 Git', '用户同步基线', '构建基线', 'recovery_required', '编辑器内 Agent 插件', '未保存的编辑器缓冲区', '三方比较', '纯净 Agent 工作区根目录')) {
         Assert-True ($userGuide.Contains($term)) "the Chinese user guide must explain $term"
     }
 
